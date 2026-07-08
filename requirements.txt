@@ -1,0 +1,16 @@
+streamlit==1.38.0
+torch>=2.2.0
+torchvision>=0.17.0
+facenet-pytorch==2.5.2
+opencv-python
+moviepy
+librosa
+numpy
+pillow
+soundfile
+scikit-learn
+pyyaml
+transformers
+matplotlib
+imageio-ffmpeg
+tqdm
