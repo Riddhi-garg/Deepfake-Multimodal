@@ -6,7 +6,7 @@ from typing import Dict, Optional
 import torch
 import torch.nn as nn
 
-from utils.helpers import load_config, setup_logger
+from utils import load_config, setup_logger
 
 logger = setup_logger("FusionModel")
 
