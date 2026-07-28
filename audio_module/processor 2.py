@@ -14,9 +14,9 @@ from utils.helpers import load_config, setup_logger
 logger = setup_logger("AudioProcessor")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # FFmpeg-based audio extraction (robust – handles QuickTime / HEVC / HEIF)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def extract_audio_from_video(video_path: str, audio_path: str) -> bool:
     """Extract the audio track from *video_path* and write to *audio_path* (WAV).
@@ -58,9 +58,8 @@ def extract_audio_from_video(video_path: str, audio_path: str) -> bool:
     return True
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Load & preprocess
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def load_and_preprocess_audio(
     audio_path: str,
@@ -101,9 +100,7 @@ def load_and_preprocess_audio(
     return y.astype(np.float32), sr
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Hand-crafted feature extraction
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_handcrafted_features(y: np.ndarray, sr: int, n_mfcc: int = 40) -> np.ndarray:
     """Compute and concatenate all handcrafted audio features.

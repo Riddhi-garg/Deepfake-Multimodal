@@ -11,9 +11,8 @@ from utils.helpers import load_config, setup_logger
 logger = setup_logger("FusionModel")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Attention-based feature fusion
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 class AttentionFusionClassifier(nn.Module):
     """Projects video and audio features into a shared space, applies multi-head
@@ -97,9 +96,8 @@ def build_fusion_model(config: Optional[Dict] = None) -> AttentionFusionClassifi
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Late fusion helper
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_late_fusion(
     video_prob: float,

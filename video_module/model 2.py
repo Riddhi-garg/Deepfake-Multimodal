@@ -13,9 +13,8 @@ from utils.helpers import load_config, setup_logger
 logger = setup_logger("VideoModel")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Model builder
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 class DeepfakeVideoClassifier(nn.Module):
     """Pretrained CNN backbone fine-tuned for binary deepfake classification."""
@@ -25,7 +24,7 @@ class DeepfakeVideoClassifier(nn.Module):
         self.backbone_name = backbone
         self._build_backbone(backbone, freeze_layers)
 
-    # ------------------------------------------------------------------
+   
     def _build_backbone(self, name: str, freeze_layers: int) -> None:
         if name == "efficientnet_b0":
             base = tv_models.efficientnet_b0(weights=tv_models.EfficientNet_B0_Weights.DEFAULT)
@@ -62,7 +61,6 @@ class DeepfakeVideoClassifier(nn.Module):
             nn.Linear(256, 2),
         )
 
-    # ------------------------------------------------------------------
     def extract_features(self, x: torch.Tensor) -> torch.Tensor:
         """Return backbone feature vectors (N, feature_dim)."""
         return self.backbone(x)
@@ -81,9 +79,7 @@ def build_video_model(config: Optional[Dict] = None) -> DeepfakeVideoClassifier:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Heuristic fallback (used when no pretrained checkpoint is available)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def predict_video_fake_heuristic(face_batch: torch.Tensor) -> float:
     """Signal-processing based fake-probability estimate.
@@ -91,7 +87,7 @@ def predict_video_fake_heuristic(face_batch: torch.Tensor) -> float:
     Computes local variance, colour channel imbalance, and high-frequency
     energy of face crops.  Returns a value in [0.05, 0.95].
     """
-    faces_np = face_batch.detach().cpu().numpy()  # (N, C, H, W)
+    faces_np = face_batch.detach().cpu().numpy()  
 
     scores = []
     for face in faces_np:

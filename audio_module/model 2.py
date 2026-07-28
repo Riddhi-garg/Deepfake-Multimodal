@@ -13,10 +13,8 @@ from utils.helpers import get_device, load_config, setup_logger
 
 logger = setup_logger("AudioModel")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Feature extractor (Wav2Vec2 + handcrafted)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 class AudioFeatureExtractor:
     """Combines Wav2Vec2 embeddings with handcrafted features.
@@ -66,9 +64,8 @@ class AudioFeatureExtractor:
         return hc_tensor
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Audio classifier model
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 class DeepfakeAudioClassifier(nn.Module):
     """MLP that classifies combined audio features as Real (0) or Fake (1)."""
@@ -106,9 +103,8 @@ def build_audio_model(config: Optional[Dict] = None) -> DeepfakeAudioClassifier:
     return DeepfakeAudioClassifier(handcrafted_dim=hc_dim)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Heuristic fallback (signal-processing based)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def predict_audio_fake_heuristic(y: np.ndarray, sr: int) -> float:
     """Spectral analysis based fake-probability estimate.

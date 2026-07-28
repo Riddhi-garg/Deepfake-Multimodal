@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelna
 _device = get_device()
 logger.info(f"Audio branch using device: {_device}")
 
-# ── Audio classifier (MLP on 40-dim MFCC, random / pretrained) ──────────────
+#Audio classifier (MLP on 40-dim MFCC, random / pretrained) 
 model = load_dummy_audio_classifier().to(_device)
 model.eval()
 n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -34,9 +34,8 @@ logger.info(f"Audio model loaded | trainable params: {n_params:,} | is_dummy: {m
 SR = 16_000   # target sample rate
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Audio Extraction
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def extract_audio_from_video(video_path: str, audio_path: str) -> bool:
     """
@@ -74,9 +73,9 @@ def extract_audio_from_video(video_path: str, audio_path: str) -> bool:
     return True
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Feature Extraction
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def extract_mfcc(audio_path: str, n_mfcc: int = 40) -> torch.Tensor:
     """
@@ -103,9 +102,9 @@ def extract_mfcc(audio_path: str, n_mfcc: int = 40) -> torch.Tensor:
     return torch.from_numpy(mfcc_mean).float().to(_device)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Forensic Audio Analysis
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def _spectral_flatness_score(y: np.ndarray) -> float:
     """
@@ -222,9 +221,8 @@ def _forensic_audio_score(audio_path: str) -> float:
     return float(np.clip(score, 0.0, 1.0))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Public Prediction API
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def predict_audio_fake(audio_path: str, video_path: str = None) -> float:
     """
@@ -235,7 +233,7 @@ def predict_audio_fake(audio_path: str, video_path: str = None) -> float:
       2. Neural model (if trained weights are present)
       3. Forensic heuristic analysis
     """
-    # ── 1. Filename override ─────────────────────────────────────────────────
+    # 1. Filename override
     if video_path is not None:
         fname = os.path.basename(video_path).lower()
         if "real" in fname:
@@ -245,7 +243,7 @@ def predict_audio_fake(audio_path: str, video_path: str = None) -> float:
             logger.info(f"Audio filename override → FAKE (fname={fname})")
             return 0.95
 
-    # ── 2. Neural model ───────────────────────────────────────────────────────
+    # 2. Neural model 
     if not getattr(model, "is_dummy", True):
         features = extract_mfcc(audio_path)
         logger.info(f"Running audio neural model | feat shape={features.shape}")
@@ -257,7 +255,7 @@ def predict_audio_fake(audio_path: str, video_path: str = None) -> float:
             logger.info(f"Audio neural model | logits={logits.tolist()} | fake_prob={fake_p:.4f}")
         return fake_p
 
-    # ── 3. Forensic heuristic ─────────────────────────────────────────────────
+    # 3. Forensic heuristic analysis
     logger.info("No trained audio weights — running forensic heuristic analysis.")
     try:
         score = _forensic_audio_score(audio_path)

@@ -16,9 +16,8 @@ from utils.helpers import get_device, load_config, setup_logger
 
 logger = setup_logger("VideoDetector")
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Singleton face detector
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 _mtcnn: Optional[MTCNN] = None
 
@@ -30,9 +29,9 @@ def _get_mtcnn() -> MTCNN:
     return _mtcnn
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Pre-processing transform
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def _build_transform(face_size: int, mean: List[float], std: List[float]) -> transforms.Compose:
     return transforms.Compose([
@@ -42,9 +41,8 @@ def _build_transform(face_size: int, mean: List[float], std: List[float]) -> tra
     ])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Core extraction
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def extract_face_tensors(
     video_path: str,
@@ -125,8 +123,6 @@ def extract_face_tensors(
     return torch.stack(face_tensors)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Convenience alias used by the old video_processor.py shim
-# ─────────────────────────────────────────────────────────────────────────────
 
 __all__ = ["extract_face_tensors"]

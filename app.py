@@ -103,31 +103,57 @@ else:
     st.success(f"✅ {n_faces} face crop(s) extracted successfully.")
 
     # Show a sample of face crops
-    cols = st.columns(min(n_faces, 6))
-    for i, (col, face) in enumerate(zip(cols, raw_faces[:6])):
-        col.image(face, caption=f"Frame {i+1}", use_column_width=True)
+# Show a sample of face crops
+cols = st.columns(min(n_faces, 6))
 
-    with st.spinner("Running visual forensic analysis…"):
-        try:
-            video_prob = predict_video_fake(
-                face_batch, video_path=video_path, raw_faces=raw_faces
+for i, (col, face) in enumerate(zip(cols, raw_faces[:6])):
+    col.image(
+        face,
+        caption=f"Frame {i+1}",
+        width="stretch"
+    )
+
+# Run visual analysis ONLY ONCE
+with st.spinner("Running visual forensic analysis…"):
+    try:
+        video_prob = predict_video_fake(
+            face_batch,
+            video_path=video_path,
+            raw_faces=raw_faces
+        )
+    except Exception as exc:
+        st.error(f"Visual analysis error: {exc}")
+        logger.error(
+            "Visual analysis exception",
+            exc_info=True
+        )
+        video_prob = None
+
+# Display result ONLY ONCE
+if video_prob is not None:
+    v_label = "🔴 Fake" if video_prob >= 0.5 else "🟢 Real"
+
+    st.metric(
+        "Visual Fake Probability",
+        f"{video_prob:.1%}"
+    )
+
+    st.progress(
+        float(video_prob),
+        text=f"Video: {v_label} ({video_prob:.1%})"
+    )
+
+    if show_debug:
+        with st.expander("🔍 Visual Debug Info"):
+            st.write(f"- Face crops analysed: `{n_faces}`")
+            st.write(f"- Tensor shape: `{tuple(face_batch.shape)}`")
+            st.write(
+                f"- Model is_dummy: "
+                f"`{getattr(video_model, 'is_dummy', True)}`"
             )
-        except Exception as exc:
-            st.error(f"Visual analysis error: {exc}")
-            logger.error("Visual analysis exception", exc_info=True)
-            video_prob = None
-
-    if video_prob is not None:
-        v_label = "🔴 Fake" if video_prob >= 0.5 else "🟢 Real"
-        st.metric("Visual Fake Probability", f"{video_prob:.1%}", delta=None)
-        st.progress(float(video_prob), text=f"Video: {v_label}  ({video_prob:.1%})")
-
-        if show_debug:
-            with st.expander("🔍 Visual Debug Info"):
-                st.write(f"- Face crops analysed: `{n_faces}`")
-                st.write(f"- Tensor shape: `{tuple(face_batch.shape)}`")
-                st.write(f"- Model is_dummy: `{getattr(video_model, 'is_dummy', True)}`")
-                st.write(f"- Raw fake probability: `{video_prob:.6f}`")
+            st.write(
+                f"- Raw fake probability: `{video_prob:.6f}`"
+            )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2 — Acoustic Analysis

@@ -22,21 +22,30 @@ from utils import load_dummy_resnet, get_device
 logger = logging.getLogger("VideoProcessor")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
-# ── Device ───────────────────────────────────────────────────────────────────
+#Device
 _device = get_device()
 logger.info(f"Video branch using device: {_device}")
 
-# ── Face detector (CPU-locked for stability on macOS MPS) ────────────────────
-mtcnn = MTCNN(keep_all=True, device="cpu", post_process=False, select_largest=True)
+#Face detector (CPU-locked for stability on macOS MPS) 
+mtcnn = MTCNN(
+    image_size=224,
+    margin=20,
+    min_face_size=20,
+    thresholds=[0.5, 0.6, 0.6],
+    factor=0.709,
+    keep_all=True,
+    device="cpu",
+    post_process=False
+)
 logger.info("MTCNN face detector initialised on CPU.")
 
-# ── Classification backbone (ResNet-18, random/pretrained weights) ───────────
+# Classification backbone (ResNet-18, random/pretrained weights)
 model = load_dummy_resnet().to(_device)
 model.eval()
 n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 logger.info(f"Visual model loaded | trainable params: {n_params:,} | is_dummy: {model.is_dummy}")
 
-# ── Preprocessing (must match the normalisation used during training) ─────────
+# Preprocessing (must match the normalisation used during training)
 preprocess = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((224, 224)),
@@ -45,112 +54,157 @@ preprocess = transforms.Compose([
 ])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Frame & Face Extraction
-# ─────────────────────────────────────────────────────────────────────────────
 
-def extract_face_tensors(video_path: str, max_frames: int = 20):
+def extract_face_tensors(video_path: str, max_frames: int = 50):
     """
-    Sample `max_frames` evenly spaced frames from the video, run MTCNN on each,
-    and return:
-      • face_tensors : torch.Tensor (N, 3, 224, 224) — preprocessed face crops
-      • raw_faces    : list[np.ndarray] — uint8 RGB crops for forensic analysis
+    Sequentially read video frames and detect faces using MTCNN.
+    More reliable than random OpenCV frame seeking.
+    """
 
-    Returns (None, []) if no faces are found.
-    """
     t0 = time.time()
+
     cap = cv2.VideoCapture(video_path)
+
     if not cap.isOpened():
         logger.error(f"Cannot open video: {video_path}")
         return None, []
 
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps   = cap.get(cv2.CAP_PROP_FPS)
-    w     = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h     = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    logger.info(f"Video: {os.path.basename(video_path)} | frames={total} | fps={fps:.1f} | res={w}×{h}")
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
 
-    if total <= 0:
-        cap.release()
-        logger.warning("Video has 0 frames — cannot extract faces.")
-        return None, []
-
-    frame_indices = (
-        list(range(total))
-        if total <= max_frames
-        else [int(i * total / max_frames) for i in range(max_frames)]
+    logger.info(
+        f"Video opened | frames={total_frames} | fps={fps}"
     )
 
-    tensors, raw_faces = [], []
-    detected, skipped = 0, 0
+    tensors = []
+    raw_faces = []
 
-    for idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+    frame_number = 0
+    detected_faces = 0
+
+    # Check approximately every 5 frames
+    sample_interval = 5
+
+    while cap.isOpened():
+
         ret, frame = cap.read()
+
         if not ret:
-            skipped += 1
+            break
+
+        frame_number += 1
+
+        # Skip frames
+        if frame_number % sample_interval != 0:
             continue
 
+        # OpenCV BGR -> RGB
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        try:
-            boxes, probs = mtcnn.detect(rgb)
-        except Exception as exc:
-            logger.debug(f"MTCNN error on frame {idx}: {exc}")
-            skipped += 1
-            continue
 
-        if boxes is None or len(boxes) == 0:
-            skipped += 1
-            continue
-
-        # Take the highest-confidence detection
-        best = int(np.argmax(probs))
-        box  = boxes[best]
-        conf = float(probs[best])
-
-        # Skip very low-confidence detections
-        if conf < 0.80:
-            skipped += 1
-            continue
-
-        x1, y1, x2, y2 = (
-            max(0, int(box[0])),
-            max(0, int(box[1])),
-            min(rgb.shape[1], int(box[2])),
-            min(rgb.shape[0], int(box[3])),
+        logger.info(
+            f"Checking frame {frame_number} | shape={rgb.shape}"
         )
-        if x2 <= x1 or y2 <= y1:
-            skipped += 1
+
+        try:
+
+            boxes, probs = mtcnn.detect(rgb)
+
+        except Exception as exc:
+
+            logger.error(
+                f"MTCNN ERROR frame {frame_number}: {exc}"
+            )
+
             continue
 
-        face = rgb[y1:y2, x1:x2]
-        if face.size == 0:
-            skipped += 1
+        if boxes is None:
+
+            logger.info(
+                f"Frame {frame_number}: NO FACE"
+            )
+
             continue
 
-        raw_faces.append(face.copy())
-        tensors.append(preprocess(face))
-        detected += 1
+        logger.info(
+            f"Frame {frame_number}: {len(boxes)} FACE(S) FOUND"
+        )
+
+        for box, confidence in zip(boxes, probs):
+
+            if confidence is None:
+                continue
+
+            logger.info(
+                f"Face confidence: {confidence:.4f}"
+            )
+
+            # Accept lower confidence faces
+            if confidence < 0.50:
+                continue
+
+            x1 = max(0, int(box[0]))
+            y1 = max(0, int(box[1]))
+            x2 = min(rgb.shape[1], int(box[2]))
+            y2 = min(rgb.shape[0], int(box[3]))
+
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            face = rgb[y1:y2, x1:x2]
+
+            if face.size == 0:
+                continue
+
+            logger.info(
+                f"FACE ACCEPTED | size={face.shape}"
+            )
+
+            raw_faces.append(face.copy())
+
+            face_tensor = preprocess(face)
+
+            tensors.append(face_tensor)
+
+            detected_faces += 1
+
+            # Stop when enough faces collected
+            if detected_faces >= max_frames:
+                break
+
+        if detected_faces >= max_frames:
+            break
 
     cap.release()
+
     elapsed = time.time() - t0
+
     logger.info(
-        f"Face extraction: {detected} faces detected, {skipped} frames skipped "
-        f"(out of {len(frame_indices)} sampled) in {elapsed:.2f}s"
+        f"FINAL FACE EXTRACTION RESULT: "
+        f"{detected_faces} faces detected "
+        f"in {elapsed:.2f} seconds"
     )
 
-    if not tensors:
-        logger.warning("No valid face crops found in video.")
+    if len(tensors) == 0:
+
+        logger.error(
+            "MTCNN DID NOT DETECT ANY FACE"
+        )
+
         return None, []
 
-    batch = torch.stack(tensors).to(_device)
-    logger.info(f"Face tensor batch shape: {batch.shape} | dtype: {batch.dtype} | device: {batch.device}")
+    batch = torch.stack(tensors)
+
+    batch = batch.to(_device)
+
+    logger.info(
+        f"Face tensor batch: {batch.shape}"
+    )
+
     return batch, raw_faces
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Forensic Signal Analysis (runs without trained weights)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def _ela_score(face_bgr: np.ndarray) -> float:
     """
@@ -270,7 +324,7 @@ def _temporal_flicker_score(raw_faces: list) -> float:
     mean_diff   = float(np.mean(diffs))
     logger.debug(f"Temporal flicker std={flicker_std:.3f}, mean_diff={mean_diff:.3f}")
 
-    # Normalise to [0,1] with a U-shaped penalty
+    # Normalise to [0,1] with a U shaped penalty
     norm = min(flicker_std / 4.0, 1.0)
     fake_prob = float(1.0 - 4.0 * norm * (1.0 - norm))
     return float(np.clip(fake_prob, 0.0, 1.0))
@@ -292,9 +346,8 @@ def _forensic_video_score(raw_faces: list) -> float:
     return float(np.clip(score, 0.0, 1.0))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Public Prediction API
-# ─────────────────────────────────────────────────────────────────────────────
 
 def predict_video_fake(
     face_tensor_batch: torch.Tensor,
@@ -310,7 +363,7 @@ def predict_video_fake(
       3. Neural model (if real trained weights are present)
       4. Forensic heuristic analysis (always available)
     """
-    # ── 1. Filename override ─────────────────────────────────────────────────
+    # 1. Filename override 
     if video_path is not None:
         fname = os.path.basename(video_path).lower()
         if "real" in fname:
@@ -320,7 +373,7 @@ def predict_video_fake(
             logger.info(f"Filename override → FAKE (fname={fname})")
             return 0.95
 
-    # ── 2. Metadata-based device check ──────────────────────────────────────
+    #  2. Metadata-based device check 
     metadata_fake_prob = 0.50
     if video_path is not None and os.path.exists(video_path):
         try:
@@ -330,7 +383,7 @@ def predict_video_fake(
         except Exception as exc:
             logger.debug(f"Metadata analysis skipped: {exc}")
 
-    # ── 3. Neural model ───────────────────────────────────────────────────────
+    #  3. Neural model 
     if not getattr(model, "is_dummy", True):
         logger.info("Running neural model inference on face batch.")
         model.eval()
@@ -344,7 +397,7 @@ def predict_video_fake(
             )
         return float(fake_p)
 
-    # ── 4. Forensic heuristic ─────────────────────────────────────────────────
+    # 4. Forensic heuristic 
     logger.info("No trained weights — running forensic heuristic analysis.")
     if raw_faces:
         try:
